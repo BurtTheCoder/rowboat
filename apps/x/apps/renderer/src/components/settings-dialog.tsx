@@ -162,7 +162,20 @@ function AppearanceSettings() {
 
 // --- Model Settings UI ---
 
-type LlmProviderFlavor = "openai" | "anthropic" | "google" | "openrouter" | "aigateway" | "ollama" | "openai-compatible"
+type LlmProviderFlavor = "openai" | "anthropic" | "google" | "openrouter" | "aigateway" | "ollama" | "openai-compatible" | "bedrock-anthropic"
+
+interface ProviderConfigEntry {
+  apiKey: string
+  baseURL: string
+  models: string[]
+  knowledgeGraphModel: string
+  awsRegion: string
+  awsAccessKeyId: string
+  awsSecretAccessKey: string
+  awsSessionToken: string
+}
+
+type ProviderConfigUpdates = Partial<Omit<ProviderConfigEntry, "models">> & { models?: string[] }
 
 interface LlmModelOption {
   id: string
@@ -180,12 +193,14 @@ const primaryProviders: Array<{ id: LlmProviderFlavor; name: string; description
 const moreProviders: Array<{ id: LlmProviderFlavor; name: string; description: string }> = [
   { id: "openrouter", name: "OpenRouter", description: "Multiple models, one key" },
   { id: "aigateway", name: "AI Gateway (Vercel)", description: "Vercel's AI Gateway" },
+  { id: "bedrock-anthropic", name: "AWS Bedrock", description: "Claude models via AWS Bedrock" },
   { id: "openai-compatible", name: "OpenAI-Compatible", description: "Custom OpenAI-compatible API" },
 ]
 
 const preferredDefaults: Partial<Record<LlmProviderFlavor, string>> = {
   openai: "gpt-5.2",
   anthropic: "claude-opus-4-6-20260202",
+  "bedrock-anthropic": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
 }
 
 const defaultBaseURLs: Partial<Record<LlmProviderFlavor, string>> = {
@@ -193,17 +208,25 @@ const defaultBaseURLs: Partial<Record<LlmProviderFlavor, string>> = {
   "openai-compatible": "http://localhost:1234/v1",
 }
 
+const emptyAwsFields = {
+  awsRegion: "",
+  awsAccessKeyId: "",
+  awsSecretAccessKey: "",
+  awsSessionToken: "",
+} as const
+
 function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
   const [provider, setProvider] = useState<LlmProviderFlavor>("openai")
   const [defaultProvider, setDefaultProvider] = useState<LlmProviderFlavor | null>(null)
-  const [providerConfigs, setProviderConfigs] = useState<Record<LlmProviderFlavor, { apiKey: string; baseURL: string; models: string[]; knowledgeGraphModel: string }>>({
-    openai: { apiKey: "", baseURL: "", models: [""], knowledgeGraphModel: "" },
-    anthropic: { apiKey: "", baseURL: "", models: [""], knowledgeGraphModel: "" },
-    google: { apiKey: "", baseURL: "", models: [""], knowledgeGraphModel: "" },
-    openrouter: { apiKey: "", baseURL: "", models: [""], knowledgeGraphModel: "" },
-    aigateway: { apiKey: "", baseURL: "", models: [""], knowledgeGraphModel: "" },
-    ollama: { apiKey: "", baseURL: "http://localhost:11434", models: [""], knowledgeGraphModel: "" },
-    "openai-compatible": { apiKey: "", baseURL: "http://localhost:1234/v1", models: [""], knowledgeGraphModel: "" },
+  const [providerConfigs, setProviderConfigs] = useState<Record<LlmProviderFlavor, ProviderConfigEntry>>({
+    openai: { apiKey: "", baseURL: "", models: [""], knowledgeGraphModel: "", ...emptyAwsFields },
+    anthropic: { apiKey: "", baseURL: "", models: [""], knowledgeGraphModel: "", ...emptyAwsFields },
+    google: { apiKey: "", baseURL: "", models: [""], knowledgeGraphModel: "", ...emptyAwsFields },
+    openrouter: { apiKey: "", baseURL: "", models: [""], knowledgeGraphModel: "", ...emptyAwsFields },
+    aigateway: { apiKey: "", baseURL: "", models: [""], knowledgeGraphModel: "", ...emptyAwsFields },
+    ollama: { apiKey: "", baseURL: "http://localhost:11434", models: [""], knowledgeGraphModel: "", ...emptyAwsFields },
+    "openai-compatible": { apiKey: "", baseURL: "http://localhost:1234/v1", models: [""], knowledgeGraphModel: "", ...emptyAwsFields },
+    "bedrock-anthropic": { apiKey: "", baseURL: "", models: [""], knowledgeGraphModel: "", awsRegion: "us-east-1", awsAccessKeyId: "", awsSecretAccessKey: "", awsSessionToken: "" },
   })
   const [modelsCatalog, setModelsCatalog] = useState<Record<string, LlmModelOption[]>>({})
   const [modelsLoading, setModelsLoading] = useState(false)
@@ -213,11 +236,13 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
   const [showMoreProviders, setShowMoreProviders] = useState(false)
 
   const activeConfig = providerConfigs[provider]
-  const showApiKey = provider === "openai" || provider === "anthropic" || provider === "google" || provider === "openrouter" || provider === "aigateway" || provider === "openai-compatible"
+  const isBedrockProvider = provider === "bedrock-anthropic"
+  const showApiKey = !isBedrockProvider && (provider === "openai" || provider === "anthropic" || provider === "google" || provider === "openrouter" || provider === "aigateway" || provider === "openai-compatible")
   const requiresApiKey = provider === "openai" || provider === "anthropic" || provider === "google" || provider === "openrouter" || provider === "aigateway"
   const showBaseURL = provider === "ollama" || provider === "openai-compatible" || provider === "aigateway"
   const requiresBaseURL = provider === "ollama" || provider === "openai-compatible"
   const isLocalProvider = provider === "ollama" || provider === "openai-compatible"
+  const showAwsCredentials = isBedrockProvider
   const modelsForProvider = modelsCatalog[provider] || []
   const showModelInput = isLocalProvider || modelsForProvider.length === 0
   const isMoreProvider = moreProviders.some(p => p.id === provider)
@@ -229,7 +254,7 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
     (!requiresBaseURL || activeConfig.baseURL.trim().length > 0)
 
   const updateConfig = useCallback(
-    (prov: LlmProviderFlavor, updates: Partial<{ apiKey: string; baseURL: string; models: string[]; knowledgeGraphModel: string }>) => {
+    (prov: LlmProviderFlavor, updates: ProviderConfigUpdates) => {
       setProviderConfigs(prev => ({
         ...prev,
         [prov]: { ...prev[prov], ...updates },
@@ -302,6 +327,10 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
                     baseURL: e.baseURL || (defaultBaseURLs[key as LlmProviderFlavor] || ""),
                     models: savedModels,
                     knowledgeGraphModel: e.knowledgeGraphModel || "",
+                    awsRegion: e.awsRegion || "",
+                    awsAccessKeyId: e.awsAccessKeyId || "",
+                    awsSecretAccessKey: e.awsSecretAccessKey || "",
+                    awsSessionToken: e.awsSessionToken || "",
                   };
                 }
               }
@@ -318,6 +347,10 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
                 baseURL: parsed.provider.baseURL || (defaultBaseURLs[flavor] || ""),
                 models: activeModels.length > 0 ? activeModels : [""],
                 knowledgeGraphModel: parsed.knowledgeGraphModel || "",
+                awsRegion: parsed.provider.awsRegion || "",
+                awsAccessKeyId: parsed.provider.awsAccessKeyId || "",
+                awsSecretAccessKey: parsed.provider.awsSecretAccessKey || "",
+                awsSessionToken: parsed.provider.awsSessionToken || "",
               };
             }
             return next;
@@ -363,7 +396,7 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
     if (Object.keys(modelsCatalog).length === 0) return
     setProviderConfigs(prev => {
       const next = { ...prev }
-      const cloudProviders: LlmProviderFlavor[] = ["openai", "anthropic", "google"]
+      const cloudProviders: LlmProviderFlavor[] = ["openai", "anthropic", "google", "bedrock-anthropic"]
       for (const prov of cloudProviders) {
         const catalog = modelsCatalog[prov]
         if (catalog?.length && !next[prov].models[0]) {
@@ -382,11 +415,20 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
     setTestState({ status: "testing" })
     try {
       const allModels = activeConfig.models.map(m => m.trim()).filter(Boolean)
+      const awsFields = isBedrockProvider
+        ? {
+            awsRegion: activeConfig.awsRegion.trim() || undefined,
+            awsAccessKeyId: activeConfig.awsAccessKeyId.trim() || undefined,
+            awsSecretAccessKey: activeConfig.awsSecretAccessKey.trim() || undefined,
+            awsSessionToken: activeConfig.awsSessionToken.trim() || undefined,
+          }
+        : {}
       const providerConfig = {
         provider: {
           flavor: provider,
           apiKey: activeConfig.apiKey.trim() || undefined,
           baseURL: activeConfig.baseURL.trim() || undefined,
+          ...awsFields,
         },
         model: allModels[0] || "",
         models: allModels,
@@ -407,18 +449,27 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
       setTestState({ status: "error", error: "Connection test failed" })
       toast.error("Connection test failed")
     }
-  }, [canTest, provider, activeConfig])
+  }, [canTest, provider, activeConfig, isBedrockProvider])
 
   const handleSetDefault = useCallback(async (prov: LlmProviderFlavor) => {
     const config = providerConfigs[prov]
     const allModels = config.models.map(m => m.trim()).filter(Boolean)
     if (!allModels[0]) return
+    const awsFields = prov === "bedrock-anthropic"
+      ? {
+          awsRegion: config.awsRegion.trim() || undefined,
+          awsAccessKeyId: config.awsAccessKeyId.trim() || undefined,
+          awsSecretAccessKey: config.awsSecretAccessKey.trim() || undefined,
+          awsSessionToken: config.awsSessionToken.trim() || undefined,
+        }
+      : {}
     try {
       await window.ipc.invoke("models:saveConfig", {
         provider: {
           flavor: prov,
           apiKey: config.apiKey.trim() || undefined,
           baseURL: config.baseURL.trim() || undefined,
+          ...awsFields,
         },
         model: allModels[0],
         models: allModels,
@@ -444,10 +495,19 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
       if (parsed?.provider?.flavor === prov && defaultProvider && defaultProvider !== prov) {
         const defConfig = providerConfigs[defaultProvider]
         const defModels = defConfig.models.map(m => m.trim()).filter(Boolean)
+        const defAwsFields = defaultProvider === "bedrock-anthropic"
+          ? {
+              awsRegion: defConfig.awsRegion.trim() || undefined,
+              awsAccessKeyId: defConfig.awsAccessKeyId.trim() || undefined,
+              awsSecretAccessKey: defConfig.awsSecretAccessKey.trim() || undefined,
+              awsSessionToken: defConfig.awsSessionToken.trim() || undefined,
+            }
+          : {}
         parsed.provider = {
           flavor: defaultProvider,
           apiKey: defConfig.apiKey.trim() || undefined,
           baseURL: defConfig.baseURL.trim() || undefined,
+          ...defAwsFields,
         }
         parsed.model = defModels[0] || ""
         parsed.models = defModels
@@ -459,7 +519,7 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
       })
       setProviderConfigs(prev => ({
         ...prev,
-        [prov]: { apiKey: "", baseURL: defaultBaseURLs[prov] || "", models: [""], knowledgeGraphModel: "" },
+        [prov]: { apiKey: "", baseURL: defaultBaseURLs[prov] || "", models: [""], knowledgeGraphModel: "", ...emptyAwsFields },
       }))
       setTestState({ status: "idle" })
       window.dispatchEvent(new Event('models-config-changed'))
@@ -681,6 +741,51 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
                   : "https://ai-gateway.vercel.sh/v1"
             }
           />
+        </div>
+      )}
+
+      {/* AWS Bedrock credentials */}
+      {showAwsCredentials && (
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Leave credentials blank to use environment variables or the AWS credential chain.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">AWS Region</span>
+              <Input
+                value={activeConfig.awsRegion}
+                onChange={(e) => updateConfig(provider, { awsRegion: e.target.value })}
+                placeholder="us-east-1"
+              />
+            </div>
+            <div className="space-y-2">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Access Key ID</span>
+              <Input
+                value={activeConfig.awsAccessKeyId}
+                onChange={(e) => updateConfig(provider, { awsAccessKeyId: e.target.value })}
+                placeholder="AKIA..."
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Secret Access Key</span>
+            <Input
+              type="password"
+              value={activeConfig.awsSecretAccessKey}
+              onChange={(e) => updateConfig(provider, { awsSecretAccessKey: e.target.value })}
+              placeholder="Paste your secret access key"
+            />
+          </div>
+          <div className="space-y-2">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Session Token (optional)</span>
+            <Input
+              type="password"
+              value={activeConfig.awsSessionToken}
+              onChange={(e) => updateConfig(provider, { awsSessionToken: e.target.value })}
+              placeholder="Only needed for temporary STS credentials"
+            />
+          </div>
         </div>
       )}
 

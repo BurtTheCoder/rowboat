@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import z from "zod";
 import { WorkDir } from "../config/config.js";
+import { BEDROCK_ANTHROPIC_MODELS } from "./bedrock-models.js";
 
 const CACHE_PATH = path.join(WorkDir, "config", "models.dev.json");
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -221,6 +222,25 @@ export async function listOnboardingModels(): Promise<{ providers: ProviderSumma
       models: normalizeModels(provider.models),
     });
   }
+
+  // Bedrock models come from a static catalog — models.dev does not track
+  // Bedrock-specific model IDs. Both the generic and Anthropic-native flavors
+  // share the same Anthropic Claude model list.
+  const bedrockModels = BEDROCK_ANTHROPIC_MODELS.map(({ id, name, release_date }) => ({
+    id,
+    name,
+    release_date,
+  }));
+  providers.push({
+    id: "bedrock-anthropic",
+    name: "AWS Bedrock (Anthropic)",
+    models: bedrockModels,
+  });
+  providers.push({
+    id: "bedrock",
+    name: "AWS Bedrock",
+    models: bedrockModels,
+  });
 
   return { providers, lastUpdated: fetchedAt };
 }
