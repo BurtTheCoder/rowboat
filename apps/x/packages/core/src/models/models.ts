@@ -81,9 +81,17 @@ export function createProvider(config: z.infer<typeof Provider>): ProviderV2 {
  * environment variables. Fields are always set explicitly (including
  * `undefined`) so the underlying SDK does not merge stale credentials from
  * unrelated env vars in serverless runtimes.
+ *
+ * Authentication precedence (enforced by the underlying SDK):
+ *   1. apiKey — Bedrock bearer token. When set, SigV4 is skipped entirely.
+ *      Sources: config.apiKey, then AWS_BEARER_TOKEN_BEDROCK env var.
+ *   2. accessKeyId + secretAccessKey (+ optional sessionToken) — SigV4.
+ *      Sources: awsAccessKeyId/awsSecretAccessKey fields, then AWS_* env
+ *      vars, then the AWS credential provider chain.
  */
 function buildBedrockConfig(config: z.infer<typeof Provider>): {
     region: string;
+    apiKey: string | undefined;
     accessKeyId: string | undefined;
     secretAccessKey: string | undefined;
     sessionToken: string | undefined;
@@ -96,6 +104,7 @@ function buildBedrockConfig(config: z.infer<typeof Provider>): {
             process.env.AWS_REGION ||
             process.env.AWS_DEFAULT_REGION ||
             "us-east-1",
+        apiKey: config.apiKey || process.env.AWS_BEARER_TOKEN_BEDROCK || undefined,
         accessKeyId: config.awsAccessKeyId || process.env.AWS_ACCESS_KEY_ID || undefined,
         secretAccessKey:
             config.awsSecretAccessKey || process.env.AWS_SECRET_ACCESS_KEY || undefined,
@@ -110,20 +119,30 @@ function buildBedrockConfig(config: z.infer<typeof Provider>): {
  * Returns null if the message is not a recognised Bedrock error.
  */
 function mapBedrockError(message: string): string | null {
+    if (message.includes("ExpiredTokenException")) {
+        return "Bedrock API key or session token has expired. Refresh the token or regenerate the Bedrock API key in the AWS console.";
+    }
+    if (
+        message.includes("InvalidBearerToken") ||
+        message.includes("InvalidApiKey") ||
+        (message.includes("401") && message.includes("Bearer"))
+    ) {
+        return "Bedrock API key is invalid. Regenerate it in the AWS Bedrock console (API keys → Create key) or unset AWS_BEARER_TOKEN_BEDROCK.";
+    }
     if (message.includes("UnrecognizedClientException") || message.includes("InvalidSignatureException")) {
-        return "AWS credentials are invalid. Check your Access Key ID and Secret Access Key.";
+        return "AWS credentials are invalid. Check your Access Key ID and Secret Access Key, or use a Bedrock API key instead.";
     }
     if (message.includes("AccessDeniedException")) {
-        return "Access denied. Ensure your IAM principal has the AmazonBedrockFullAccess policy, and that you have requested access to this model in the Bedrock console (Model access → Manage model access).";
+        return "Access denied. Ensure your IAM principal (or Bedrock API key) has the AmazonBedrockFullAccess policy, and that you have requested access to this model in the Bedrock console (Model access → Manage model access).";
     }
     if (message.includes("ResourceNotFoundException") || message.includes("ValidationException")) {
-        return 'Model not found or not available in this region. Verify the model ID and region. Cross-region inference profile IDs start with "us." (e.g. us.anthropic.claude-sonnet-4-5-20250929-v1:0).';
+        return 'Model not found or not available in this region. Verify the model ID and region. Cross-region inference profile IDs start with "global." or "us." (e.g. global.anthropic.claude-opus-4-6-v1).';
     }
     if (message.includes("ThrottlingException")) {
         return "Bedrock request throttled. Try again in a moment or request a service quota increase.";
     }
     if (message.includes("Could not load credentials") || message.includes("CredentialsProviderError")) {
-        return "No AWS credentials found. Set AWS credentials in the provider config, via AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY environment variables, or use an instance profile.";
+        return "No AWS credentials found. Set a Bedrock API key (AWS_BEARER_TOKEN_BEDROCK), AWS credentials (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY), or use an instance profile.";
     }
     return null;
 }

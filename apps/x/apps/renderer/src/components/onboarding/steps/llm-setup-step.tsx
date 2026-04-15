@@ -44,7 +44,7 @@ export function LlmSetupStep({ state }: LlmSetupStepProps) {
   const {
     llmProvider, setLlmProvider, modelsCatalog, modelsLoading, modelsError,
     activeConfig, testState, setTestState, showApiKey,
-    showBaseURL, showAwsCredentials, isLocalProvider, canTest, showMoreProviders, setShowMoreProviders,
+    showBaseURL, showAwsCredentials, isBedrockProvider, isLocalProvider, canTest, showMoreProviders, setShowMoreProviders,
     updateProviderConfig, handleTestAndSaveLlmConfig, handleBack,
     upsellDismissed, setUpsellDismissed, handleSwitchToRowboat,
   } = state
@@ -228,15 +228,20 @@ export function LlmSetupStep({ state }: LlmSetupStepProps) {
         {showApiKey && (
           <div className="space-y-2">
             <label className="text-xs font-medium text-muted-foreground">
-              API Key {!state.requiresApiKey && "(optional)"}
+              {isBedrockProvider ? "Bedrock API Key" : "API Key"} {!state.requiresApiKey && "(optional)"}
             </label>
             <Input
               type="password"
               value={activeConfig.apiKey}
               onChange={(e) => updateProviderConfig(llmProvider, { apiKey: e.target.value })}
-              placeholder="Paste your API key"
+              placeholder={isBedrockProvider ? "Bedrock API key (or set AWS_BEARER_TOKEN_BEDROCK)" : "Paste your API key"}
               className="font-mono"
             />
+            {isBedrockProvider && (
+              <p className="text-xs text-muted-foreground">
+                Optional bearer token for Bedrock. If set, it bypasses AWS SigV4 and the AWS credentials below are ignored.
+              </p>
+            )}
           </div>
         )}
 
@@ -263,7 +268,7 @@ export function LlmSetupStep({ state }: LlmSetupStepProps) {
         {showAwsCredentials && (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Leave credentials blank to use environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) or the default AWS credential chain.
+              SigV4 credentials (used only when no Bedrock API key is set above). Leave blank to fall back to environment variables (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY) or the default AWS credential chain (instance profile, etc.).
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">

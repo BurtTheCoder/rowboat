@@ -108,7 +108,10 @@ export function useOnboardingState(open: boolean, onComplete: () => void) {
 
   const activeConfig = providerConfigs[llmProvider]
   const isBedrockProvider = llmProvider === "bedrock-anthropic"
-  const showApiKey = !isBedrockProvider && (llmProvider === "openai" || llmProvider === "anthropic" || llmProvider === "google" || llmProvider === "openrouter" || llmProvider === "aigateway" || llmProvider === "openai-compatible")
+  // The API key field is shown for providers that authenticate with a single
+  // token. For Bedrock it doubles as the optional Bedrock API key (bearer
+  // token) — AWS credentials below are the alternative.
+  const showApiKey = llmProvider === "openai" || llmProvider === "anthropic" || llmProvider === "google" || llmProvider === "openrouter" || llmProvider === "aigateway" || llmProvider === "openai-compatible" || isBedrockProvider
   const requiresApiKey = llmProvider === "openai" || llmProvider === "anthropic" || llmProvider === "google" || llmProvider === "openrouter" || llmProvider === "aigateway"
   const requiresBaseURL = llmProvider === "ollama" || llmProvider === "openai-compatible"
   const showBaseURL = llmProvider === "ollama" || llmProvider === "openai-compatible" || llmProvider === "aigateway"

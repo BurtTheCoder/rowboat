@@ -237,7 +237,9 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
 
   const activeConfig = providerConfigs[provider]
   const isBedrockProvider = provider === "bedrock-anthropic"
-  const showApiKey = !isBedrockProvider && (provider === "openai" || provider === "anthropic" || provider === "google" || provider === "openrouter" || provider === "aigateway" || provider === "openai-compatible")
+  // For Bedrock, the API key field is the optional bearer token (Bedrock API
+  // key); AWS credentials below are the SigV4 alternative.
+  const showApiKey = provider === "openai" || provider === "anthropic" || provider === "google" || provider === "openrouter" || provider === "aigateway" || provider === "openai-compatible" || isBedrockProvider
   const requiresApiKey = provider === "openai" || provider === "anthropic" || provider === "google" || provider === "openrouter" || provider === "aigateway"
   const showBaseURL = provider === "ollama" || provider === "openai-compatible" || provider === "aigateway"
   const requiresBaseURL = provider === "ollama" || provider === "openai-compatible"
@@ -715,14 +717,23 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
       {showApiKey && (
         <div className="space-y-2">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            {provider === "openai-compatible" ? "API Key (optional)" : "API Key"}
+            {isBedrockProvider
+              ? "Bedrock API Key (optional)"
+              : provider === "openai-compatible"
+                ? "API Key (optional)"
+                : "API Key"}
           </span>
           <Input
             type="password"
             value={activeConfig.apiKey}
             onChange={(e) => updateConfig(provider, { apiKey: e.target.value })}
-            placeholder="Paste your API key"
+            placeholder={isBedrockProvider ? "Bedrock API key (or set AWS_BEARER_TOKEN_BEDROCK)" : "Paste your API key"}
           />
+          {isBedrockProvider && (
+            <p className="text-xs text-muted-foreground">
+              Bearer token for Bedrock. When set, SigV4 is bypassed and the AWS credentials below are ignored.
+            </p>
+          )}
         </div>
       )}
 
@@ -748,7 +759,7 @@ function ModelSettings({ dialogOpen }: { dialogOpen: boolean }) {
       {showAwsCredentials && (
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            Leave credentials blank to use environment variables or the AWS credential chain.
+            SigV4 credentials (used only when no Bedrock API key is set above). Leave blank to fall back to environment variables or the default AWS credential chain.
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
