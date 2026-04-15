@@ -98,6 +98,14 @@ export function GranolaIcon({ className }: IconProps) {
   )
 }
 
+export function AwsBedrockIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={cn("size-5", className)}>
+      <path d="M6.76 9.99 12 12.35l5.24-2.36L12 7.63zM4 10.9v6.1l7 3.15V14.05zm9 3.15v6.1l7-3.15v-6.1zM12 2 2 6.5 12 11l10-4.5z" />
+    </svg>
+  )
+}
+
 export function GenericApiIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={cn("size-5", className)}>

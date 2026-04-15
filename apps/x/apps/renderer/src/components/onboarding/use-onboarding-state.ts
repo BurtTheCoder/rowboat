@@ -12,13 +12,26 @@ export type Step = 0 | 1 | 2 | 3
 
 export type OnboardingPath = 'rowboat' | 'byok' | null
 
-export type LlmProviderFlavor = "openai" | "anthropic" | "google" | "openrouter" | "aigateway" | "ollama" | "openai-compatible"
+export type LlmProviderFlavor = "openai" | "anthropic" | "google" | "openrouter" | "aigateway" | "ollama" | "openai-compatible" | "bedrock-anthropic"
 
 export interface LlmModelOption {
   id: string
   name?: string
   release_date?: string
 }
+
+interface ProviderConfigEntry {
+  apiKey: string
+  baseURL: string
+  model: string
+  knowledgeGraphModel: string
+  awsRegion: string
+  awsAccessKeyId: string
+  awsSecretAccessKey: string
+  awsSessionToken: string
+}
+
+type ProviderConfigUpdates = Partial<ProviderConfigEntry>
 
 export function useOnboardingState(open: boolean, onComplete: () => void) {
   const [currentStep, setCurrentStep] = useState<Step>(0)
@@ -29,14 +42,16 @@ export function useOnboardingState(open: boolean, onComplete: () => void) {
   const [modelsCatalog, setModelsCatalog] = useState<Record<string, LlmModelOption[]>>({})
   const [modelsLoading, setModelsLoading] = useState(false)
   const [modelsError, setModelsError] = useState<string | null>(null)
-  const [providerConfigs, setProviderConfigs] = useState<Record<LlmProviderFlavor, { apiKey: string; baseURL: string; model: string; knowledgeGraphModel: string }>>({
-    openai: { apiKey: "", baseURL: "", model: "", knowledgeGraphModel: "" },
-    anthropic: { apiKey: "", baseURL: "", model: "", knowledgeGraphModel: "" },
-    google: { apiKey: "", baseURL: "", model: "", knowledgeGraphModel: "" },
-    openrouter: { apiKey: "", baseURL: "", model: "", knowledgeGraphModel: "" },
-    aigateway: { apiKey: "", baseURL: "", model: "", knowledgeGraphModel: "" },
-    ollama: { apiKey: "", baseURL: "http://localhost:11434", model: "", knowledgeGraphModel: "" },
-    "openai-compatible": { apiKey: "", baseURL: "http://localhost:1234/v1", model: "", knowledgeGraphModel: "" },
+  const emptyAws = { awsRegion: "", awsAccessKeyId: "", awsSecretAccessKey: "", awsSessionToken: "" }
+  const [providerConfigs, setProviderConfigs] = useState<Record<LlmProviderFlavor, ProviderConfigEntry>>({
+    openai: { apiKey: "", baseURL: "", model: "", knowledgeGraphModel: "", ...emptyAws },
+    anthropic: { apiKey: "", baseURL: "", model: "", knowledgeGraphModel: "", ...emptyAws },
+    google: { apiKey: "", baseURL: "", model: "", knowledgeGraphModel: "", ...emptyAws },
+    openrouter: { apiKey: "", baseURL: "", model: "", knowledgeGraphModel: "", ...emptyAws },
+    aigateway: { apiKey: "", baseURL: "", model: "", knowledgeGraphModel: "", ...emptyAws },
+    ollama: { apiKey: "", baseURL: "http://localhost:11434", model: "", knowledgeGraphModel: "", ...emptyAws },
+    "openai-compatible": { apiKey: "", baseURL: "http://localhost:1234/v1", model: "", knowledgeGraphModel: "", ...emptyAws },
+    "bedrock-anthropic": { apiKey: "", baseURL: "", model: "", knowledgeGraphModel: "", awsRegion: "us-east-1", awsAccessKeyId: "", awsSecretAccessKey: "", awsSessionToken: "" },
   })
   const [testState, setTestState] = useState<{ status: "idle" | "testing" | "success" | "error"; error?: string }>({
     status: "idle",
@@ -81,7 +96,7 @@ export function useOnboardingState(open: boolean, onComplete: () => void) {
   const [googleCalendarConnecting, setGoogleCalendarConnecting] = useState(false)
 
   const updateProviderConfig = useCallback(
-    (provider: LlmProviderFlavor, updates: Partial<{ apiKey: string; baseURL: string; model: string; knowledgeGraphModel: string }>) => {
+    (provider: LlmProviderFlavor, updates: ProviderConfigUpdates) => {
       setProviderConfigs(prev => ({
         ...prev,
         [provider]: { ...prev[provider], ...updates },
@@ -92,11 +107,16 @@ export function useOnboardingState(open: boolean, onComplete: () => void) {
   )
 
   const activeConfig = providerConfigs[llmProvider]
-  const showApiKey = llmProvider === "openai" || llmProvider === "anthropic" || llmProvider === "google" || llmProvider === "openrouter" || llmProvider === "aigateway" || llmProvider === "openai-compatible"
+  const isBedrockProvider = llmProvider === "bedrock-anthropic"
+  // The API key field is shown for providers that authenticate with a single
+  // token. For Bedrock it doubles as the optional Bedrock API key (bearer
+  // token) — AWS credentials below are the alternative.
+  const showApiKey = llmProvider === "openai" || llmProvider === "anthropic" || llmProvider === "google" || llmProvider === "openrouter" || llmProvider === "aigateway" || llmProvider === "openai-compatible" || isBedrockProvider
   const requiresApiKey = llmProvider === "openai" || llmProvider === "anthropic" || llmProvider === "google" || llmProvider === "openrouter" || llmProvider === "aigateway"
   const requiresBaseURL = llmProvider === "ollama" || llmProvider === "openai-compatible"
   const showBaseURL = llmProvider === "ollama" || llmProvider === "openai-compatible" || llmProvider === "aigateway"
   const isLocalProvider = llmProvider === "ollama" || llmProvider === "openai-compatible"
+  const showAwsCredentials = isBedrockProvider
   const canTest =
     activeConfig.model.trim().length > 0 &&
     (!requiresApiKey || activeConfig.apiKey.trim().length > 0) &&
@@ -174,6 +194,7 @@ export function useOnboardingState(open: boolean, onComplete: () => void) {
   const preferredDefaults: Partial<Record<LlmProviderFlavor, string>> = {
     openai: "gpt-5.2",
     anthropic: "claude-opus-4-6-20260202",
+    "bedrock-anthropic": "global.anthropic.claude-opus-4-6-v1",
   }
 
   // Initialize default models from catalog
@@ -181,7 +202,7 @@ export function useOnboardingState(open: boolean, onComplete: () => void) {
     if (Object.keys(modelsCatalog).length === 0) return
     setProviderConfigs(prev => {
       const next = { ...prev }
-      const cloudProviders: LlmProviderFlavor[] = ["openai", "anthropic", "google"]
+      const cloudProviders: LlmProviderFlavor[] = ["openai", "anthropic", "google", "bedrock-anthropic"]
       for (const provider of cloudProviders) {
         const models = modelsCatalog[provider]
         if (models?.length && !next[provider].model) {
@@ -435,11 +456,20 @@ export function useOnboardingState(open: boolean, onComplete: () => void) {
       const baseURL = activeConfig.baseURL.trim() || undefined
       const model = activeConfig.model.trim()
       const knowledgeGraphModel = activeConfig.knowledgeGraphModel.trim() || undefined
+      const awsFields = isBedrockProvider
+        ? {
+            awsRegion: activeConfig.awsRegion.trim() || undefined,
+            awsAccessKeyId: activeConfig.awsAccessKeyId.trim() || undefined,
+            awsSecretAccessKey: activeConfig.awsSecretAccessKey.trim() || undefined,
+            awsSessionToken: activeConfig.awsSessionToken.trim() || undefined,
+          }
+        : {}
       const providerConfig = {
         provider: {
           flavor: llmProvider,
           apiKey,
           baseURL,
+          ...awsFields,
         },
         model,
         knowledgeGraphModel,
@@ -459,7 +489,7 @@ export function useOnboardingState(open: boolean, onComplete: () => void) {
       setTestState({ status: "error", error: "Connection test failed" })
       toast.error("Connection test failed")
     }
-  }, [activeConfig.apiKey, activeConfig.baseURL, activeConfig.model, activeConfig.knowledgeGraphModel, canTest, llmProvider, handleNext])
+  }, [activeConfig.apiKey, activeConfig.baseURL, activeConfig.model, activeConfig.knowledgeGraphModel, activeConfig.awsRegion, activeConfig.awsAccessKeyId, activeConfig.awsSecretAccessKey, activeConfig.awsSessionToken, canTest, llmProvider, isBedrockProvider, handleNext])
 
   // Check connection status for all providers
   const refreshAllStatuses = useCallback(async () => {
@@ -645,6 +675,8 @@ export function useOnboardingState(open: boolean, onComplete: () => void) {
     requiresApiKey,
     requiresBaseURL,
     showBaseURL,
+    showAwsCredentials,
+    isBedrockProvider,
     isLocalProvider,
     canTest,
     showMoreProviders,

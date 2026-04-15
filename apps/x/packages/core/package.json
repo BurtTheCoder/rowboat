@@ -9,6 +9,7 @@
     "dev": "tsc -w"
   },
   "dependencies": {
+    "@ai-sdk/amazon-bedrock": "^3.0.93",
     "@ai-sdk/anthropic": "^2.0.63",
     "@ai-sdk/google": "^2.0.53",
     "@ai-sdk/openai": "^2.0.91",

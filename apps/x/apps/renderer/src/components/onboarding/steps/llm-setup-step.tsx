@@ -17,6 +17,7 @@ import {
   OllamaIcon,
   OpenRouterIcon,
   VercelIcon,
+  AwsBedrockIcon,
   GenericApiIcon,
 } from "../provider-icons"
 import type { OnboardingState, LlmProviderFlavor } from "../use-onboarding-state"
@@ -35,6 +36,7 @@ const primaryProviders: Array<{ id: LlmProviderFlavor; name: string; description
 const moreProviders: Array<{ id: LlmProviderFlavor; name: string; description: string; color: string; icon: React.ReactNode }> = [
   { id: "openrouter", name: "OpenRouter", description: "Multiple models, one key", color: "bg-pink-500/10 text-pink-600 dark:text-pink-400", icon: <OpenRouterIcon /> },
   { id: "aigateway", name: "AI Gateway", description: "Vercel AI Gateway", color: "bg-sky-500/10 text-sky-600 dark:text-sky-400", icon: <VercelIcon /> },
+  { id: "bedrock-anthropic", name: "AWS Bedrock", description: "Claude via Bedrock", color: "bg-amber-500/10 text-amber-600 dark:text-amber-400", icon: <AwsBedrockIcon /> },
   { id: "openai-compatible", name: "OpenAI-Compatible", description: "Custom endpoint", color: "bg-gray-500/10 text-gray-600 dark:text-gray-400", icon: <GenericApiIcon /> },
 ]
 
@@ -42,7 +44,7 @@ export function LlmSetupStep({ state }: LlmSetupStepProps) {
   const {
     llmProvider, setLlmProvider, modelsCatalog, modelsLoading, modelsError,
     activeConfig, testState, setTestState, showApiKey,
-    showBaseURL, isLocalProvider, canTest, showMoreProviders, setShowMoreProviders,
+    showBaseURL, showAwsCredentials, isBedrockProvider, isLocalProvider, canTest, showMoreProviders, setShowMoreProviders,
     updateProviderConfig, handleTestAndSaveLlmConfig, handleBack,
     upsellDismissed, setUpsellDismissed, handleSwitchToRowboat,
   } = state
@@ -226,15 +228,20 @@ export function LlmSetupStep({ state }: LlmSetupStepProps) {
         {showApiKey && (
           <div className="space-y-2">
             <label className="text-xs font-medium text-muted-foreground">
-              API Key {!state.requiresApiKey && "(optional)"}
+              {isBedrockProvider ? "Bedrock API Key" : "API Key"} {!state.requiresApiKey && "(optional)"}
             </label>
             <Input
               type="password"
               value={activeConfig.apiKey}
               onChange={(e) => updateProviderConfig(llmProvider, { apiKey: e.target.value })}
-              placeholder="Paste your API key"
+              placeholder={isBedrockProvider ? "Bedrock API key (or set AWS_BEARER_TOKEN_BEDROCK)" : "Paste your API key"}
               className="font-mono"
             />
+            {isBedrockProvider && (
+              <p className="text-xs text-muted-foreground">
+                Optional bearer token for Bedrock. If set, it bypasses AWS SigV4 and the AWS credentials below are ignored.
+              </p>
+            )}
           </div>
         )}
 
@@ -255,6 +262,54 @@ export function LlmSetupStep({ state }: LlmSetupStepProps) {
               }
               className="font-mono"
             />
+          </div>
+        )}
+
+        {showAwsCredentials && (
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              SigV4 credentials (used only when no Bedrock API key is set above). Leave blank to fall back to environment variables (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY) or the default AWS credential chain (instance profile, etc.).
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">AWS Region</label>
+                <Input
+                  value={activeConfig.awsRegion}
+                  onChange={(e) => updateProviderConfig(llmProvider, { awsRegion: e.target.value })}
+                  placeholder="us-east-1"
+                  className="font-mono"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Access Key ID (optional)</label>
+                <Input
+                  value={activeConfig.awsAccessKeyId}
+                  onChange={(e) => updateProviderConfig(llmProvider, { awsAccessKeyId: e.target.value })}
+                  placeholder="AKIA..."
+                  className="font-mono"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Secret Access Key (optional)</label>
+              <Input
+                type="password"
+                value={activeConfig.awsSecretAccessKey}
+                onChange={(e) => updateProviderConfig(llmProvider, { awsSecretAccessKey: e.target.value })}
+                placeholder="Paste your secret access key"
+                className="font-mono"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Session Token (optional)</label>
+              <Input
+                type="password"
+                value={activeConfig.awsSessionToken}
+                onChange={(e) => updateProviderConfig(llmProvider, { awsSessionToken: e.target.value })}
+                placeholder="Only needed for temporary STS credentials"
+                className="font-mono"
+              />
+            </div>
           </div>
         )}
       </div>
