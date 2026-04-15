@@ -191,7 +191,7 @@ export function useOnboardingState(open: boolean, onComplete: () => void) {
   const preferredDefaults: Partial<Record<LlmProviderFlavor, string>> = {
     openai: "gpt-5.2",
     anthropic: "claude-opus-4-6-20260202",
-    "bedrock-anthropic": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "bedrock-anthropic": "global.anthropic.claude-opus-4-6-v1",
   }
 
   // Initialize default models from catalog

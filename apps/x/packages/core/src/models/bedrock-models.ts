@@ -1,9 +1,15 @@
 // Static catalog of Anthropic models available on AWS Bedrock.
 //
 // models.dev (used by models-dev.ts) does not track Bedrock-specific model
-// IDs, so we ship a curated list here. Model IDs prefixed with "us." are
-// cross-region inference profiles that automatically route to the best
-// available region within the US commercial partition.
+// IDs, so we ship a curated list here.
+//
+// Model ID prefixes:
+//   - "global." — cross-region inference profile that routes across all
+//     commercial regions (US, EU, APAC); highest availability.
+//   - "us."     — cross-region profile scoped to US commercial regions;
+//     use this instead if you need US-only data residency.
+//   - no prefix — single-region model, must be invoked in the region where
+//     it is deployed.
 
 export type BedrockModelEntry = {
     id: string;
@@ -18,14 +24,24 @@ export type BedrockModelEntry = {
  */
 export const BEDROCK_ANTHROPIC_MODELS: BedrockModelEntry[] = [
     {
+        id: "global.anthropic.claude-sonnet-4-6",
+        name: "Claude Sonnet 4.6",
+        release_date: "2026-02-05",
+    },
+    {
+        id: "global.anthropic.claude-opus-4-6-v1",
+        name: "Claude Opus 4.6",
+        release_date: "2026-02-05",
+    },
+    {
+        id: "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+        name: "Claude Haiku 4.5",
+        release_date: "2025-10-01",
+    },
+    {
         id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
         name: "Claude Sonnet 4.5",
         release_date: "2025-09-29",
-    },
-    {
-        id: "anthropic.claude-haiku-4-5-20251001-v1:0",
-        name: "Claude Haiku 4.5",
-        release_date: "2025-10-01",
     },
     {
         id: "us.anthropic.claude-opus-4-1-20250805-v1:0",
